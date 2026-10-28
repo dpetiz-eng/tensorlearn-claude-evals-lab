@@ -5,7 +5,28 @@
     "RATE-1",
     "PRIVACY-1"
   ],
-  "inputDescription": "TODO describe workload and starting revision",
+  "inputDescription": "Starts from the released starter revision a4d88ab78fe2ccf63508f4a93db31d10c878aec0, where the live-status service had a 30-second per-customer cache in front of claims-core (references/good.mjs) and the guidance change removed it (references/broken.mjs). The repeatable workload is fixtures/workload.json: 60 status requests from one customer (CUS-000123), 10 ms apart from 0 ms to 590 ms, all inside one second and one cache TTL. Each version's observe(requests) records one observation (requests, upstreamCalls, responses, logs, requirements) that evaluate() in evals/assert.mjs judges. Expected: the cached version makes 1 upstream call and passes; the uncached version makes 60 and fails CACHE-1 and RATE-1.",
   "assertion": "evals/assert.mjs",
-  "checks": []
+  "checks": [
+    {
+      "id": "EVIDENCE",
+      "requirementIds": ["CACHE-1", "RATE-1", "PRIVACY-1"],
+      "condition": "The observation is an object with requests, upstreamCalls, responses and logs arrays; requirements has numeric maxRequestsPerSecond and cacheTtlMs and a non-empty list of forbiddenLogFragments; there is at least one request; every request and upstream call has a customerCode and a numeric atMs; every log entry is a string. Otherwise the run fails, because the requirements cannot be judged from it."
+    },
+    {
+      "id": "CACHE-1",
+      "requirementIds": ["CACHE-1"],
+      "condition": "Grouping upstreamCalls by customerCode and ordering each group by atMs (on a copy), every call after a customer's first is at least requirements.cacheTtlMs (30000 ms) after that customer's previous upstream call. A refresh exactly 30000 ms later passes; calls for different customers never conflict."
+    },
+    {
+      "id": "RATE-1",
+      "requirementIds": ["RATE-1"],
+      "condition": "Over all upstreamCalls (calls that reached claims-core, not incoming requests), no rolling window [t, t + 1000 ms) starting at any call's atMs contains more than requirements.maxRequestsPerSecond (50) calls. 50 calls in a second pass; 51 fail."
+    },
+    {
+      "id": "PRIVACY-1",
+      "requirementIds": ["PRIVACY-1"],
+      "condition": "No string in logs contains any of requirements.forbiddenLogFragments as a substring, compared case-insensitively. Other log text passes, whatever its wording."
+    }
+  ]
 }
